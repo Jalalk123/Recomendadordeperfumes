@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recomendador de Perfumes</title>
+    <!-- Incluir Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Configuración de Tailwind para usar la fuente Inter y algunos colores base -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: '#6B46C1', // Un morado agradable
+                        secondary: '#805AD5', // Otro tono de morado
+                        accent: '#ECC94B', // Amarillo para detalles
+                        background: '#F7FAFC', // Fondo claro
+                        text: '#2D3748', // Texto oscuro
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Fuente Inter de Google Fonts */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    </style>
+</head>
+<body class="font-sans bg-background text-text min-h-screen flex items-center justify-center p-4">
+    <div class="max-w-4xl w-full bg-white shadow-xl rounded-xl p-8 space-y-8">
+        <h1 class="text-4xl font-bold text-center text-primary mb-6">Recomendador de Perfumes</h1>
+        <p class="text-center text-lg text-gray-700 mb-8">
+            Selecciona una marca y un perfume para encontrar fragancias similares disponibles en nuestro stock.
+        </p>
+
+        <!-- Controles de selección -->
+        <div class="flex flex-col md:flex-row gap-6 items-end">
+            <div class="flex-1 w-full">
+                <label for="brand-dropdown" class="block text-sm font-medium text-gray-700 mb-1">Marca</label>
+                <select id="brand-dropdown"
+                        class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md shadow-sm cursor-pointer
+                                bg-white hover:border-secondary transition duration-150 ease-in-out">
+                    <option value="">Selecciona una marca</option>
+                </select>
+            </div>
+            <div class="flex-1 w-full">
+                <label for="perfume-dropdown" class="block text-sm font-medium text-gray-700 mb-1">Nombre del Perfume</label>
+                <select id="perfume-dropdown"
+                        class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md shadow-sm cursor-pointer
+                                bg-white hover:border-secondary transition duration-150 ease-in-out" disabled>
+                    <option value="">Selecciona un perfume</option>
+                </select>
+            </div>
+            <button id="search-button"
+                    class="md:w-auto w-full px-6 py-2 bg-primary text-white font-semibold rounded-md shadow-md
+                            hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary
+                            transition duration-150 ease-in-out transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
+                Buscar
+            </button>
+        </div>
+
+        <!-- Área de mensajes (carga, errores) -->
+        <div id="message-area" class="text-center mt-4 text-gray-600"></div>
+
+        <!-- Resultados de la recomendación -->
+        <div id="results-area" class="mt-8">
+            <h2 class="text-2xl font-semibold text-primary mb-4 hidden" id="results-title">Perfumes Recomendados en Stock</h2>
+            <div class="overflow-x-auto rounded-lg shadow-md">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-primary text-white">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider rounded-tl-lg">Imagen</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Marca</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Perfume</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Similitud</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Notas</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider rounded-tr-lg">Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recommendations-table-body" class="bg-white divide-y divide-gray-200">
+                        <!-- Las recomendaciones se insertarán aquí -->
+                        <tr id="no-results-row" class="hidden">
+                            <td colspan="6" class="px-6 py-4 text-center text-gray-500 italic">No se encontraron perfumes similares en stock.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Configuración del Backend ---
+        // ¡IMPORTANTE! Cuando lo subas a Hostinger, reemplaza esta URL
+        // con la URL de tu backend de Flask.
+        // Ejemplo: const BACKEND_URL = "https://tudominio.com/mi-app-perfumes";
+        const BACKEND_URL = "http://127.0.0.1:5000";
+
+        // --- Elementos del DOM ---
+        const brandDropdown = document.getElementById('brand-dropdown');
+        const perfumeDropdown = document.getElementById('perfume-dropdown');
+        const searchButton = document.getElementById('search-button');
+        const recommendationsTableBody = document.getElementById('recommendations-table-body');
+        const noResultsRow = document.getElementById('no-results-row');
+        const messageArea = document.getElementById('message-area');
+        const resultsTitle = document.getElementById('results-title');
+
+        // --- Funciones de Utilidad ---
+
+        /**
+         * Actualiza el estado del botón de búsqueda (habilitado/deshabilitado)
+         * basado en si se ha seleccionado una marca y un perfume.
+         */
+        function updateSearchButtonState() {
+            const isBrandSelected = brandDropdown.value !== "";
+            const isPerfumeSelected = perfumeDropdown.value !== "";
+            searchButton.disabled = !(isBrandSelected && isPerfumeSelected);
+        }
+
+        /**
+         * Limpia los mensajes y oculta el título de resultados.
+         */
+        function clearMessagesAndResultsTitle() {
+            messageArea.textContent = "";
+            resultsTitle.classList.add('hidden');
+        }
+
+        /**
+         * Limpia los resultados de la tabla y oculta el mensaje de "no resultados".
+         */
+        function clearRecommendationsTable() {
+            recommendationsTableBody.innerHTML = '';
+            noResultsRow.classList.add('hidden');
+        }
+
+        /**
+         * Muestra un mensaje de error al usuario.
+         * @param {string} msg - El mensaje de error.
+         */
+        function showErrorMessage(msg) {
+            messageArea.textContent = msg;
+            messageArea.classList.remove('text-gray-600', 'text-blue-600');
+            messageArea.classList.add('text-red-600');
+            clearRecommendationsTable();
+            resultsTitle.classList.add('hidden');
+        }
+
+        /**
+         * Muestra un mensaje de carga al usuario.
+         * @param {string} msg - El mensaje de carga.
+         */
+        function showLoadingMessage(msg) {
+            messageArea.textContent = msg;
+            messageArea.classList.remove('text-gray-600', 'text-red-600');
+            messageArea.classList.add('text-blue-600');
+            clearRecommendationsTable();
+            resultsTitle.classList.add('hidden');
+        }
+
+        /**
+         * Inicializa los dropdowns de marca y perfume haciendo fetch al backend.
+         */
+        async function initializeDropdowns() {
+            showLoadingMessage("Cargando marcas...");
+            try {
+                const response = await fetch(`${BACKEND_URL}/brands`);
+                if (!response.ok) {
+                    throw new Error(`Error HTTP! status: ${response.status}`);
+                }
+                const uniqueBrands = await response.json();
+
+                brandDropdown.innerHTML = '<option value="">Selecciona una marca</option>';
+                uniqueBrands.forEach(brand => {
+                    const option = document.createElement('option');
+                    option.value = brand;
+                    option.textContent = brand;
+                    brandDropdown.appendChild(option);
+                });
+                messageArea.textContent = ""; // Limpiar mensaje de carga
+            } catch (error) {
+                console.error("Error al cargar las marcas:", error);
+                showErrorMessage("Error al cargar las marcas. Asegúrate de que el backend esté funcionando.");
+            } finally {
+                updateSearchButtonState();
+            }
+        }
+
+        /**
+         * Actualiza el dropdown de perfumes basándose en la marca seleccionada, haciendo fetch al backend.
+         * @param {string} selectedBrand - La marca seleccionada.
+         */
+        async function updatePerfumeDropdown(selectedBrand) {
+            perfumeDropdown.innerHTML = '<option value="">Selecciona un perfume</option>';
+            perfumeDropdown.disabled = true;
+            clearRecommendationsTable();
+            clearMessagesAndResultsTitle();
+
+            if (selectedBrand) {
+                showLoadingMessage(`Cargando perfumes para ${selectedBrand}...`);
+                try {
+                    const response = await fetch(`${BACKEND_URL}/perfumes_by_brand/${encodeURIComponent(selectedBrand)}`);
+                    if (!response.ok) {
+                        throw new Error(`Error HTTP! status: ${response.status}`);
+                    }
+                    const perfumesByBrand = await response.json();
+
+                    perfumesByBrand.forEach(perfume => {
+                        const option = document.createElement('option');
+                        option.value = perfume;
+                        option.textContent = perfume;
+                        perfumeDropdown.appendChild(option);
+                    });
+                    perfumeDropdown.disabled = false;
+                    messageArea.textContent = ""; // Limpiar mensaje de carga
+                } catch (error) {
+                    console.error("Error al cargar los perfumes por marca:", error);
+                    showErrorMessage("Error al cargar los perfumes. Asegúrate de que el backend esté funcionando.");
+                }
+            }
+            updateSearchButtonState();
+        }
+
+        /**
+         * Obtiene y muestra las recomendaciones de perfumes haciendo fetch al backend.
+         * @param {string} selectedBrand - La marca del perfume seleccionado por el usuario.
+         * @param {string} selectedPerfume - El nombre del perfume seleccionado por el usuario.
+         */
+        async function getAndDisplayRecommendations(selectedBrand, selectedPerfume) {
+            clearRecommendationsTable();
+            showLoadingMessage("Buscando recomendaciones...");
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/recommend`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ brand: selectedBrand, perfume: selectedPerfume }),
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`Error del servidor: ${errorData.error || response.statusText}`);
+                }
+
+                const recommendations = await response.json();
+                displayRecommendations(recommendations);
+
+            } catch (error) {
+                console.error("Error al obtener las recomendaciones:", error);
+                showErrorMessage(`Error al obtener recomendaciones: ${error.message}.`);
+            }
+        }
+
+        /**
+         * Renderiza los perfumes recomendados en la tabla HTML.
+         * @param {Array<Object>} recommendations - Lista de objetos de perfume recomendados.
+         */
+        function displayRecommendations(recommendations) {
+            recommendationsTableBody.innerHTML = ''; // Limpiar resultados anteriores
+            noResultsRow.classList.add('hidden'); // Ocultar mensaje de no resultados
+
+            if (recommendations.length === 0) {
+                messageArea.textContent = "No se encontraron perfumes similares en stock para tu selección.";
+                noResultsRow.classList.remove('hidden'); // Mostrar mensaje de no resultados en tabla
+                resultsTitle.classList.add('hidden');
+                return;
+            }
+
+            resultsTitle.classList.remove('hidden'); // Mostrar título de resultados
+            messageArea.textContent = ""; // Limpiar mensaje de carga
+            messageArea.classList.remove('text-blue-600');
+            messageArea.classList.add('text-gray-600'); // Volver al color de texto normal
+
+            recommendations.forEach(perfume => {
+                const row = document.createElement('tr');
+                row.classList.add('hover:bg-gray-50'); // Efecto hover para las filas
+
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <img src="${perfume.imageUrl}" alt="${perfume.perfume}" class="w-16 h-16 object-cover rounded-md shadow-sm"
+                             onerror="this.onerror=null; this.src='https://placehold.co/80x80/f7f7f7/6B46C1?text=Img';">
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${perfume.brand}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">${perfume.perfume}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">${(perfume.similarity * 100).toFixed(2)}%</td>
+                    <td class="px-6 py-4 text-sm text-gray-800">${perfume.notes.split(',').map(n => n.trim()).sort().join(', ')}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-green-600">En Stock</td>
+                `;
+                recommendationsTableBody.appendChild(row);
+            });
+        }
+
+        // --- Event Listeners ---
+
+        // Cuando cambia la selección de la marca
+        brandDropdown.addEventListener('change', (event) => {
+            updatePerfumeDropdown(event.target.value);
+            updateSearchButtonState(); // Asegurar que el botón se actualice al cambiar la marca
+        });
+
+        // Cuando cambia la selección del perfume
+        perfumeDropdown.addEventListener('change', () => {
+            updateSearchButtonState();
+            clearRecommendationsTable();
+            clearMessagesAndResultsTitle();
+        });
+
+        // Cuando se hace clic en el botón de búsqueda
+        searchButton.addEventListener('click', () => {
+            const selectedBrand = brandDropdown.value;
+            const selectedPerfume = perfumeDropdown.value;
+
+            if (selectedBrand && selectedPerfume) {
+                getAndDisplayRecommendations(selectedBrand, selectedPerfume);
+            } else {
+                showErrorMessage("Por favor, selecciona una marca y un perfume.");
+            }
+        });
+
+        // Inicializar al cargar la página
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeDropdowns();
+            // Asegurarse de que el dropdown de perfume esté deshabilitado al inicio
+            perfumeDropdown.disabled = true;
+            updateSearchButtonState();
+        });
+
+    </script>
+</body>
+</html>

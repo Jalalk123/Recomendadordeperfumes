@@ -1,0 +1,40 @@
+    services:
+      - type: web
+        name: perfume-recommender-api
+        env: python
+        # El comando que Render usará para instalar tus dependencias
+        buildCommand: pip install -r requirements.txt
+        # El comando que Render usará para iniciar tu aplicación Flask
+        # Se asume que app.py es tu script y el nombre de la instancia es 'app'
+        startCommand: gunicorn --bind 0.0.0.0:8000 app:app
+    ```
+3.  **Sube tu código a un repositorio de Git:** La forma más fácil de desplegar en Render es a través de Git (por ejemplo, en GitHub). 
+    * Crea un nuevo repositorio en GitHub.
+    * Sube todos tus archivos (`app.py`, `requirements.txt`, los `.xlsx`, y `render.yaml`) a este repositorio.
+4.  **Crea una cuenta en Render.com y conecta tu repositorio:**
+    * Inicia sesión en Render y ve a tu Dashboard.
+    * Haz clic en "New Web Service".
+    * Selecciona "Build from a public Git repository" o conecta tu cuenta de GitHub.
+    * Pega la URL de tu repositorio y haz clic en "Connect".
+5.  **Configura el servicio en Render:**
+    * Render detectará automáticamente tu `render.yaml` y la configuración.
+    * Dale un nombre a tu servicio (por ejemplo, `perfume-recommender`).
+    * Elige el plan gratuito y haz clic en "Create Web Service".
+
+Render se encargará de todo el despliegue. Una vez que termine, te dará una URL pública para tu backend (algo como `https://perfume-recommender.onrender.com`).
+
+---
+
+### El Paso Final: Conectar el Frontend
+
+Una vez que tengas la URL de tu backend de Render, solo necesitas hacer un último ajuste en tu archivo `index.html`.
+
+* Abre `index.html` en tu editor.
+* Busca la línea de la variable `BACKEND_URL`:
+    ```javascript
+    const BACKEND_URL = "http://127.0.0.1:5000";
+    ```
+* **Cámbiala** para que apunte a la URL que te dio Render:
+    ```javascript
+    const BACKEND_URL = "https://perfume-recommender.onrender.com"; // ¡Esta es la URL que te dará Render!
+    
